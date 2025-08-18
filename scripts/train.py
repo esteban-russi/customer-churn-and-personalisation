@@ -1,201 +1,214 @@
 # === 1. IMPORTS & SETUP ===
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
+import joblib
+import os
+import tensorflow as tf
 
-# Preprocessing
+# Suppress verbose TensorFlow logging
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+from sklearn.metrics import classification_report, roc_auc_score
 
-# Models
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.neighbors import KNeighborsClassifier # New
-from xgboost import XGBClassifier
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
+from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import Dense, Dropout, Input, BatchNormalization
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
-# Evaluation
-from sklearn.metrics import classification_report, roc_auc_score, precision_score, recall_score, f1_score
+# === 2. CONFIGURATION ===
+# Define file paths and model parameters in one place
+class Config:
+    DATA_FILE = 'Vodafone_Customer_Churn_Sample_Dataset.csv'
+    MODEL_OUTPUT_DIR = 'production_model'
+    PREPROCESSOR_FILE = os.path.join(MODEL_OUTPUT_DIR, 'preprocessor.joblib')
+    MODEL_FILE = os.path.join(MODEL_OUTPUT_DIR, 'churn_model.keras')
 
-# --- Define Client Brand Colors ---
-NO_CHURN_COLOR = '#FF004F'
-CHURN_COLOR = '#00FFBF'
-# Add a third color for visualizations
-NEUTRAL_COLOR = '#8C8C8C'
+# === 3. THE CHURN PREDICTOR CLASS ===
+class ChurnPredictor:
+    """
+    A class to encapsulate the churn prediction model workflow, from training to prediction.
+    """
+    def __init__(self):
+        self.preprocessor = None
+        self.model = None
+        self.numerical_features = []
+        self.categorical_features = []
 
+    def _build_preprocessor(self):
+        """Builds the scikit-learn preprocessing pipeline."""
+        return ColumnTransformer(
+            transformers=[
+                ('num', StandardScaler(), self.numerical_features),
+                ('cat', OneHotEncoder(handle_unknown='ignore', drop='first'), self.categorical_features)
+            ],
+            remainder='passthrough'
+        )
 
-# === 2. DATA LOADING & PREPARATION (Unchanged) ===
-df = pd.read_csv('Vodafone_Customer_Churn_Sample_Dataset.csv')
-#df = pd.read_csv('C:\\Users\\esteb\\Documents\\GitHub\\customer-churn-and-personalisation\\data\\Vodafone_Customer_Churn_Sample_Dataset.csv')
+    def _build_model(self, input_dim):
+        """Builds the Keras Neural Network model."""
+        model = Sequential([
+            Input(shape=(input_dim,)),
+            Dense(64, activation='relu'), BatchNormalization(), Dropout(0.4),
+            Dense(32, activation='relu'), BatchNormalization(), Dropout(0.4),
+            Dense(1, activation='sigmoid')
+        ])
+        optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+        model.compile(optimizer=optimizer, 
+                      loss='binary_crossentropy', 
+                      metrics=[tf.keras.metrics.AUC(name='auc')])
+        return model
 
-df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
-df['TotalCharges'].fillna(0, inplace=True)
-df['Churn'] = df['Churn'].apply(lambda x: 1 if x == 'Yes' else 0)
-df.drop('customerID', axis=1, inplace=True)
+    def train(self, X: pd.DataFrame, y: pd.Series):
+        """
+        Trains the preprocessor and the neural network model.
+        Args:
+            X (pd.DataFrame): The training features.
+            y (pd.Series): The training target labels.
+        """
+        print("Starting model training...")
+        
+        # Identify feature types from the training data
+        self.numerical_features = X.select_dtypes(include=np.number).columns.tolist()
+        self.categorical_features = X.select_dtypes(include='object').columns.tolist()
+        
+        # Build and fit the preprocessor
+        self.preprocessor = self._build_preprocessor()
+        X_train_processed = self.preprocessor.fit_transform(X)
+        
+        # Build the model
+        input_dim = X_train_processed.shape[1]
+        self.model = self._build_model(input_dim)
+        
+        # Calculate class weights for imbalance
+        class_weight_0 = (1 / y.value_counts()[0]) * (len(y) / 2.0)
+        class_weight_1 = (1 / y.value_counts()[1]) * (len(y) / 2.0)
+        nn_class_weights = {0: class_weight_0, 1: class_weight_1}
 
-X = df.drop('Churn', axis=1)
-y = df['Churn']
+        # Define callbacks for intelligent training
+        early_stopping = EarlyStopping(monitor='val_auc', patience=15, mode='max', restore_best_weights=True)
+        reduce_lr = ReduceLROnPlateau(monitor='val_auc', factor=0.2, patience=5, min_lr=1e-5, mode='max')
+        
+        print("Training Neural Network...")
+        self.model.fit(
+            X_train_processed, y,
+            epochs=200,
+            batch_size=32,
+            validation_split=0.2,
+            class_weight=nn_class_weights,
+            callbacks=[early_stopping, reduce_lr],
+            verbose=1 # Show progress during training
+        )
+        print("Training complete.")
 
-numerical_features = X.select_dtypes(include=np.number).columns.tolist()
-categorical_features = X.select_dtypes(include='object').columns.tolist()
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        """
+        Generates class predictions (0 or 1) for new data.
+        Args:
+            X (pd.DataFrame): New data for prediction.
+        Returns:
+            np.ndarray: An array of churn predictions (0 or 1).
+        """
+        if self.preprocessor is None or self.model is None:
+            raise RuntimeError("Model has not been trained or loaded. Please train or load a model first.")
+        
+        X_processed = self.preprocessor.transform(X)
+        predictions = self.predict_proba(X)
+        return (predictions > 0.5).astype(int)
 
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        """
+        Generates churn probabilities for new data.
+        Args:
+            X (pd.DataFrame): New data for prediction.
+        Returns:
+            np.ndarray: An array of churn probabilities (0.0 to 1.0).
+        """
+        if self.preprocessor is None or self.model is None:
+            raise RuntimeError("Model has not been trained or loaded. Please train or load a model first.")
+        
+        X_processed = self.preprocessor.transform(X)
+        return self.model.predict(X_processed).flatten()
 
-# === 3. PREPROCESSING PIPELINE (Unchanged) ===
-preprocessor = ColumnTransformer(
-    transformers=[
-        ('num', StandardScaler(), numerical_features),
-        ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)
-    ],
-    remainder='passthrough'
-)
+    def save_model(self, model_dir: str = Config.MODEL_OUTPUT_DIR):
+        """
+        Saves the trained preprocessor and model to disk.
+        Args:
+            model_dir (str): The directory to save the model components.
+        """
+        if self.preprocessor is None or self.model is None:
+            raise RuntimeError("No trained model to save.")
+        
+        os.makedirs(model_dir, exist_ok=True)
+        joblib.dump(self.preprocessor, os.path.join(model_dir, 'preprocessor.joblib'))
+        self.model.save(os.path.join(model_dir, 'churn_model.keras'))
+        print(f"Model saved successfully to directory: {model_dir}")
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+    @classmethod
+    def load_model(cls, model_dir: str = Config.MODEL_OUTPUT_DIR):
+        """
+        Loads a pre-trained model and preprocessor from disk.
+        Args:
+            model_dir (str): The directory containing the model components.
+        Returns:
+            ChurnPredictor: An instance of the class with the loaded model.
+        """
+        predictor = cls()
+        predictor.preprocessor = joblib.load(os.path.join(model_dir, 'preprocessor.joblib'))
+        predictor.model = load_model(os.path.join(model_dir, 'churn_model.keras'))
+        print(f"Model loaded successfully from directory: {model_dir}")
+        return predictor
 
+# === 4. MAIN EXECUTION SCRIPT ===
+if __name__ == "__main__":
+    # --- Step 1: Load and Prepare Data ---
+    df = pd.read_csv(Config.DATA_FILE)
+    df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
+    df['TotalCharges'].fillna(0, inplace=True)
+    df['Churn'] = df['Churn'].apply(lambda x: 1 if x == 'Yes' else 0)
+    df.drop('customerID', axis=1, inplace=True)
 
-# === 4. MODEL TRAINING (New Lineup) ===
+    X = df.drop('Churn', axis=1)
+    y = df['Churn']
+    
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
-# --- Model 1: Random Forest ---
-rf_pipeline = Pipeline(steps=[('preprocessor', preprocessor),
-                              ('classifier', RandomForestClassifier(random_state=42, class_weight='balanced', n_estimators=150))])
-print("Training Random Forest model...")
-rf_pipeline.fit(X_train, y_train)
-print("Done.\n")
+    # --- Step 2: Train and Save the Model ---
+    predictor = ChurnPredictor()
+    predictor.train(X_train, y_train)
+    predictor.save_model()
 
-# --- Model 2: K-Nearest Neighbors (KNN) ---
-# NOTE: KNN is sensitive to class imbalance and has no 'class_weight' parameter.
-# It would perform better with SMOTE. Here, we include it as a different type of model for comparison.
-knn_pipeline = Pipeline(steps=[('preprocessor', preprocessor),
-                               ('classifier', KNeighborsClassifier(n_neighbors=11))])
-print("Training KNN model...")
-knn_pipeline.fit(X_train, y_train)
-print("Done.\n")
-
-# --- Model 3: XGBoost (Industry Standard) ---
-scale_pos_weight = y_train.value_counts()[0] / y_train.value_counts()[1]
-xgb_pipeline = Pipeline(steps=[('preprocessor', preprocessor),
-                               ('classifier', XGBClassifier(random_state=42, use_label_encoder=False, 
-                                                            eval_metric='logloss', scale_pos_weight=scale_pos_weight))])
-print("Training XGBoost model...")
-xgb_pipeline.fit(X_train, y_train)
-print("Done.\n")
-
-# --- Model 4: Upgraded Neural Network ---
-X_train_processed = rf_pipeline.named_steps['preprocessor'].transform(X_train)
-X_test_processed = rf_pipeline.named_steps['preprocessor'].transform(X_test)
-input_shape = X_train_processed.shape[1]
-
-def create_upgraded_nn_model(input_dim):
-    model = Sequential([
-        Input(shape=(input_dim,)),
-        Dense(64, activation='relu'), BatchNormalization(), Dropout(0.4),
-        Dense(32, activation='relu'), BatchNormalization(), Dropout(0.4),
-        Dense(1, activation='sigmoid')
-    ])
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='binary_crossentropy', metrics=[tf.keras.metrics.AUC(name='auc')])
-    return model
-
-nn_model_upgraded = create_upgraded_nn_model(input_shape)
-class_weight_0 = (1 / y_train.value_counts()[0]) * (len(y_train) / 2.0)
-class_weight_1 = (1 / y_train.value_counts()[1]) * (len(y_train) / 2.0)
-nn_class_weights = {0: class_weight_0, 1: class_weight_1}
-
-early_stopping = EarlyStopping(monitor='val_auc', patience=15, mode='max', restore_best_weights=True)
-reduce_lr = ReduceLROnPlateau(monitor='val_auc', factor=0.2, patience=5, min_lr=0.00001, mode='max')
-
-print("\nTraining Upgraded Neural Network model...")
-history = nn_model_upgraded.fit(X_train_processed, y_train, epochs=200, batch_size=32, validation_split=0.2,
-                                class_weight=nn_class_weights, callbacks=[early_stopping, reduce_lr], verbose=0)
-print("Done. Model training stopped at epoch:", early_stopping.stopped_epoch)
-
-
-# === 5. MODEL EVALUATION ===
-
-# Get predictions
-rf_preds = rf_pipeline.predict(X_test)
-knn_preds = knn_pipeline.predict(X_test)
-xgb_preds = xgb_pipeline.predict(X_test)
-nn_preds_proba = nn_model_upgraded.predict(X_test_processed).flatten()
-nn_preds = (nn_preds_proba > 0.5).astype(int)
-
-# Get prediction probabilities for AUC
-rf_preds_proba = rf_pipeline.predict_proba(X_test)[:, 1]
-knn_preds_proba = knn_pipeline.predict_proba(X_test)[:, 1]
-xgb_preds_proba = xgb_pipeline.predict_proba(X_test)[:, 1]
-
-# Store results in a dictionary
-results = {
-    'Random Forest': {
-        'AUC': roc_auc_score(y_test, rf_preds_proba),
-        'F1 (Churn)': f1_score(y_test, rf_preds, pos_label=1),
-        'Recall (Churn)': recall_score(y_test, rf_preds, pos_label=1),
-        'Precision (Churn)': precision_score(y_test, rf_preds, pos_label=1)
-    },
-    'KNN': {
-        'AUC': roc_auc_score(y_test, knn_preds_proba),
-        'F1 (Churn)': f1_score(y_test, knn_preds, pos_label=1),
-        'Recall (Churn)': recall_score(y_test, knn_preds, pos_label=1),
-        'Precision (Churn)': precision_score(y_test, knn_preds, pos_label=1)
-    },
-    'XGBoost': {
-        'AUC': roc_auc_score(y_test, xgb_preds_proba),
-        'F1 (Churn)': f1_score(y_test, xgb_preds, pos_label=1),
-        'Recall (Churn)': recall_score(y_test, xgb_preds, pos_label=1),
-        'Precision (Churn)': precision_score(y_test, xgb_preds, pos_label=1)
-    },
-    'Neural Network': {
-        'AUC': roc_auc_score(y_test, nn_preds_proba),
-        'F1 (Churn)': f1_score(y_test, nn_preds, pos_label=1),
-        'Recall (Churn)': recall_score(y_test, nn_preds, pos_label=1),
-        'Precision (Churn)': precision_score(y_test, nn_preds, pos_label=1)
-    }
-}
-
-# Print the results
-print("\n" + "="*60)
-print("              Final Model Performance")
-print("="*60)
-for model_name, metrics in results.items():
-    print(f"\n--- {model_name} ---")
-    for metric_name, value in metrics.items():
-        print(f"{metric_name}: {value:.4f}")
-print("="*60)
-
-
-# === 6. RESULTS VISUALIZATION & SAVING ===
-
-# Convert results dictionary to a DataFrame for easier plotting
-results_df = pd.DataFrame(results).T.reset_index().rename(columns={'index': 'Model'})
-results_melted = results_df.melt(id_vars='Model', var_name='Metric', value_name='Score')
-
-# Create the plot
-plt.figure(figsize=(14, 8))
-ax = sns.barplot(data=results_melted, x='Metric', y='Score', hue='Model', 
-                 palette=[CHURN_COLOR, NEUTRAL_COLOR, '#00A383', '#B2DFD6']) # A palette derived from our brand colors
-
-# Add annotations
-for p in ax.patches:
-    ax.annotate(format(p.get_height(), '.2f'), 
-                   (p.get_x() + p.get_width() / 2., p.get_height()), 
-                   ha = 'center', va = 'center', 
-                   xytext = (0, 9), 
-                   textcoords = 'offset points')
-
-# Customize and save
-plt.title('Final Model Performance Comparison', fontsize=18, pad=20)
-plt.xlabel('Evaluation Metric', fontsize=12)
-plt.ylabel('Score', fontsize=12)
-plt.ylim(0, 1.0)
-plt.legend(title='Model', fontsize=10)
-sns.despine()
-
-# Save the figure to a PNG file
-output_filename = 'model_performance_comparison.png'
-plt.savefig(output_filename, dpi=300, bbox_inches='tight')
-print(f"\nChart saved successfully as '{output_filename}'")
-
-plt.show()
+    # --- Step 3: Load the Model and Evaluate on Test Data ---
+    # This simulates a real-world scenario where you load a pre-trained model for inference.
+    print("\n--- Simulating Production Inference ---")
+    loaded_predictor = ChurnPredictor.load_model()
+    
+    # Make predictions on the unseen test set
+    test_predictions = loaded_predictor.predict(X_test)
+    test_probabilities = loaded_predictor.predict_proba(X_test)
+    
+    # --- Step 4: Report Final Performance ---
+    print("\n--- Final Model Performance on Unseen Test Data ---")
+    print(classification_report(y_test, test_predictions, target_names=['No Churn (0)', 'Churn (1)']))
+    print(f"AUC-ROC Score: {roc_auc_score(y_test, test_probabilities):.4f}")
+    
+    # --- Step 5: Example Prediction on a Single Customer ---
+    print("\n--- Example: Predicting on a single new customer ---")
+    # Create a new customer profile matching the training data columns
+    new_customer = pd.DataFrame([{
+        'gender': 'Female', 'SeniorCitizen': 0, 'Partner': 'No', 'Dependents': 'No',
+        'tenure': 1, 'PhoneService': 'No', 'MultipleLines': 'No phone service',
+        'InternetService': 'DSL', 'OnlineSecurity': 'No', 'OnlineBackup': 'Yes',
+        'DeviceProtection': 'No', 'TechSupport': 'No', 'StreamingTV': 'No',
+        'StreamingMovies': 'No', 'Contract': 'Month-to-month', 'PaperlessBilling': 'Yes',
+        'PaymentMethod': 'Electronic check', 'MonthlyCharges': 29.85, 'TotalCharges': 29.85
+    }])
+    
+    churn_probability = loaded_predictor.predict_proba(new_customer)[0]
+    print(f"Predicted churn probability for the new customer: {churn_probability:.4f}")
+    if churn_probability > 0.5:
+        print("Prediction: Customer is AT RISK of churning.")
+    else:
+        print("Prediction: Customer is likely to stay.")
