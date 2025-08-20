@@ -22,7 +22,7 @@ The solution first trains a high-performance Neural Network to accurately predic
 ## Workflow Overview
 
 1. **Exploratory Data Analysis (EDA)**: The raw dataset is loaded, cleaned (handling missing values and incorrect data types), and thoroughly analyzed to identify initial patterns and key features related to churn.
-2. **Model Experimentation ("Bake-Off")**: A diverse set of machine learning models (Random Forest, XGBoost, Neural Network) are trained and rigorously evaluated using metrics appropriate for imbalanced data (AUC-ROC, F1-Score, Recall).
+2. **Model Experimentation**: A diverse set of machine learning models (Random Forest, XGBoost, Neural Network) are trained and rigorously evaluated using metrics appropriate for imbalanced data (AUC-ROC, F1-Score, Recall).
 3. **Champion Model Selection**: The best-performing model—the Neural Network—is selected as the champion based on its superior ability to identify at-risk customers.
 4. **Explainable AI (XAI) with SHAP**: The champion model, often considered a "black box," is interpreted using SHAP. This crucial step reveals the magnitude and direction of each feature's impact on every single prediction.
 5. **Actionable Customer Profiling**: The SHAP insights are synthesized into six data-driven 'Loyalty Profiles' (e.g., "Freedom Seeker," "At-Risk VIP"), creating actionable segments for the marketing team.
