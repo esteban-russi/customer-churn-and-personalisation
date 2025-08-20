@@ -71,7 +71,7 @@ To run this project, please follow these steps.
    cd customer-churn-personalisation-with-llms
    ```
 
-2. **Create a Virtual Environment (Recommended)**
+2. **Create a Virtual Environment**
    ```bash
    python -m venv venv
    # On macOS/Linux:
@@ -104,4 +104,4 @@ To run this project, please follow these steps.
 
 ### Part II: Personalized Action
 - **Generative AI System**: A robust system was built to generate high-quality, personalized retention emails that strictly adhere to the client's brand guidelines.
-- **Demonstrated Personalization**: The `live_email_demo.py` script successfully showcases the end-to-end pipeline, generating unique emails for different customer personas and sending them in real-time, proving the viability of the concept.
+- **Demonstrated Personalization**: The `04_Email_Demo.ipynb` script successfully showcases the end-to-end pipeline, generating unique emails for different customer personas and sending them in real-time, proving the viability of the concept.
