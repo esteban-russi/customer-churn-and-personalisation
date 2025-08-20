@@ -12,16 +12,14 @@ The solution first trains a high-performance Neural Network to accurately predic
 - [Results](#results)
 
 ## Technical Stack
-The project leverages a modern, robust stack for data science and AI development:
 
 - **Programming Language**: Python 3.10+
 - **Data Science & Machine Learning**: Pandas, NumPy, Scikit-learn, TensorFlow (Keras), XGBoost
 - **Model Explainability**: SHAP
-- **Generative AI**: Google Gemini API (google-generativeai)
+- **Generative AI**: Google Gemini API (gemini-1.5-pro-latest)
 - **Environment & Utilities**: Jupyter Notebooks, python-dotenv, Matplotlib, Seaborn
 
 ## Workflow Overview
-The project follows a structured, end-to-end workflow from data to action:
 
 1. **Exploratory Data Analysis (EDA)**: The raw dataset is loaded, cleaned (handling missing values and incorrect data types), and thoroughly analyzed to identify initial patterns and key features related to churn.
 2. **Model Experimentation ("Bake-Off")**: A diverse set of machine learning models (Random Forest, XGBoost, Neural Network) are trained and rigorously evaluated using metrics appropriate for imbalanced data (AUC-ROC, F1-Score, Recall).
@@ -32,18 +30,22 @@ The project follows a structured, end-to-end workflow from data to action:
 7. **Live Demo Simulation**: A final script demonstrates the entire pipeline by identifying personas from a demo dataset, generating personalized emails in real-time, and sending them to specified recipients.
 
 ## Repository Structure
-The repository is organized to separate exploratory work from production-ready code, following MLOps best practices.
 
 ```
 DEPT-Churn-Case/
 │
 ├── data/
 │   └── Vodafone_Customer_Churn_Sample_Dataset.csv
+│   └── loyalty_profiles.csv
 ├── models/
-│   └── .gitkeep
+│   └── churn_model.keras
+│   └── preprocessor.joblib
 ├── notebooks/
 │   ├── 01_EDA_and_Data_Cleaning.ipynb
 │   └── 02_Model_Experimentation_and_Profiling.ipynb
+│   └── 03_Generative_AI_Email_Personalisation.ipynb
+│   └── 04_Email_Demo.ipynb
+
 ├── scripts/
 │   └── live_email_demo.py
 ├── .env.example
@@ -54,15 +56,17 @@ DEPT-Churn-Case/
 
 ### Notebooks Explained
 - **01_EDA_and_Data_Cleaning.ipynb**: This notebook covers the foundational analysis. It includes data loading, cleaning of the TotalCharges column, visualization of key churn drivers (like Contract and tenure), and confirmation of the class imbalance, which informs our entire modeling strategy.
-- **02_Model_Experimentation_and_Profiling.ipynb**: This is the core data science notebook. It documents the model "bake-off," including the training of Random Forest, XGBoost, and the champion Neural Network. It contains the evaluation metrics and visualizations that justify the model selection. Crucially, this notebook also holds the SHAP analysis, with the summary plots and force plots used to understand the model's logic. Finally, it concludes by operationalizing these insights into the six Actionable Loyalty Profiles.
+- **02_Model_Experimentation_and_Profiling.ipynb**: This is the core data science notebook. It documents the model "bake-off," including the training of Random Forest, XGBoost, and a Neural Network. It contains the evaluation metrics and visualizations that justify the model selection. Crucially, this notebook also holds the SHAP analysis, with the summary plots and force plots used to understand the model's logic. Finally, it concludes by operationalizing these insights into the six Actionable Loyalty Profiles.
+- **03_Generative_AI_Email_Personalisation.ipynb**: This notebook covers Part II of the case study, focusing on the research and development of the email generation system. It begins by loading the Actionable Loyalty Profiles created in the previous notebook. The central piece is the "Master Prompt," a carefully engineered set of instructions that hard-codes the client's brand guidelines and defines placeholders for personalization. The notebook contains the logic layer that maps customer profiles to specific offers and then calls the Google Gemini API.
+- **04_Email_Demo.ipynb**: This notebook is a self-contained, interactive script designed for the live demonstration to the client. It operationalizes the concepts developed in notebook 03 into a polished, executable format. It features a small, hand-picked demo dataset of high-risk customer profiles and contains the necessary functions to connect to a Gmail SMTP server using credentials from the .env file. When run, it generates a unique email for each demo persona and sends them in real-time to specified recipient email addresses, providing a tangible and powerful showcase of the end-to-end system's capabilities.
 
 ## Setup and Installation
 To run this project, please follow these steps.
 
 1. **Clone the Repository**
    ```bash
-   git clone https://github.com/your-username/DEPT-Churn-Case.git
-   cd DEPT-Churn-Case
+   git clone github.com/esteban-russi/customer-churn-personalisation-with-llms.git
+   cd customer-churn-personalisation-with-llms
    ```
 
 2. **Create a Virtual Environment (Recommended)**
@@ -80,9 +84,7 @@ To run this project, please follow these steps.
    ```
 
 4. **Set Up Environment Variables**
-   Create a copy of the template file: `cp .env.example .env` (or `copy .env.example .env` on Windows).
-
-   Open the newly created `.env` file and add your credentials:
+   Create a `.env` file and add your credentials:
    ```
    EMAIL_SENDER="your.email@gmail.com"
    EMAIL_PASSWORD="your-16-character-google-app-password"
@@ -91,7 +93,7 @@ To run this project, please follow these steps.
 
 ## Results
 ### Part I: Prediction & Insights
-- **Champion Model**: A Deep Neural Network (DNN) was selected as the champion model, achieving an AUC score of ~0.85 and a high Recall of ~0.78 for the churn class, demonstrating a strong ability to identify at-risk customers.
+- **Champion Model**: A Deep Neural Network (DNN) was selected as the champion model, achieving an AUC score of ~0.86 and a high Recall of ~0.81 for the churn class, demonstrating a strong ability to identify at-risk customers.
 - **Key Churn Drivers**: SHAP analysis revealed the top three factors that increase churn risk are:
   - Being on a Month-to-Month contract.
   - Having a low tenure (being a new customer).
