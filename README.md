@@ -1,4 +1,4 @@
-# Proactive Customer Retention with AI
+# From Churn Prediction to Personalisation with AI
 ![Project Banner](figures/banner.png)
 This repository contains the end-to-end solution that tackles customer churn for Vodafone by developing a comprehensive AI retention system.
 
@@ -47,6 +47,8 @@ DEPT-Churn-Case/
 │   └── 02_Model_Experimentation_and_Profiling.ipynb
 │   └── 03_Generative_AI_Email_Personalisation.ipynb
 │   └── 04_Email_Demo.ipynb
+├── notebooks/
+│   └── slide_deck.pdf
 ├── scripts/
 │   └── best_model.py
 ├── .gitignore
