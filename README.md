@@ -37,6 +37,8 @@ DEPT-Churn-Case/
 ├── data/
 │   └── Vodafone_Customer_Churn_Sample_Dataset.csv
 │   └── loyalty_profiles.csv
+├── figures/
+├── literature/
 ├── models/
 │   └── churn_model.keras
 │   └── preprocessor.joblib
@@ -45,10 +47,8 @@ DEPT-Churn-Case/
 │   └── 02_Model_Experimentation_and_Profiling.ipynb
 │   └── 03_Generative_AI_Email_Personalisation.ipynb
 │   └── 04_Email_Demo.ipynb
-
 ├── scripts/
-│   └── live_email_demo.py
-├── .env.example
+│   └── best_model.py
 ├── .gitignore
 ├── README.md
 └── requirements.txt
