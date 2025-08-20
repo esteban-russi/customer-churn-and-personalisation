@@ -1,6 +1,6 @@
-# Proactive Customer Retention with AI - A Case Study for DEPT®
+# Proactive Customer Retention with AI
 
-This repository contains the end-to-end solution for the DEPT® Data Science & AI case study. The project tackles customer churn for Vodafone by developing a comprehensive AI retention system.
+This repository contains the end-to-end solution that tackles customer churn for Vodafone by developing a comprehensive AI retention system.
 
 The solution first trains a high-performance Neural Network to accurately predict at-risk customers. It then employs Explainable AI (XAI) with SHAP to understand the specific drivers behind each prediction. These insights are synthesized into actionable 'Loyalty Profiles,' which power a generative AI system using the Google Gemini API to automatically compose and send personalized, on-brand retention emails. The result is a seamless, scalable application that bridges predictive analytics with creative marketing automation.
 
