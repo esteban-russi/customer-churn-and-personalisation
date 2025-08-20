@@ -1,5 +1,5 @@
 # Proactive Customer Retention with AI
-
+![Project Banner](figures/banner.png)
 This repository contains the end-to-end solution that tackles customer churn for Vodafone by developing a comprehensive AI retention system.
 
 The solution first trains a high-performance Neural Network to accurately predict at-risk customers. It then employs Explainable AI (XAI) with SHAP to understand the specific drivers behind each prediction. These insights are synthesized into actionable 'Loyalty Profiles,' which power a generative AI system using the Google Gemini API to automatically compose and send personalized, on-brand retention emails. The result is a seamless, scalable application that bridges predictive analytics with creative marketing automation.
